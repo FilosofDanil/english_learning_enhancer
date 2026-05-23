@@ -65,3 +65,32 @@ func TestTokenizeSplitsSlashes(t *testing.T) {
 		t.Fatalf("want >=4 tokens, got %v", toks)
 	}
 }
+
+func TestMissingWordsAreMarkedAndScored(t *testing.T) {
+	expected := "one two three four"
+	got := CheckAnswer(expected, "one two")
+
+	if got.Points != 0.5 {
+		t.Fatalf("want 0.5 for 2/4 matched words, got %.2f", got.Points)
+	}
+	if len(got.Words) < 4 {
+		t.Fatalf("want at least 4 word results, got %d", len(got.Words))
+	}
+	if got.Words[2].Status != StatusMissing || got.Words[3].Status != StatusMissing {
+		t.Fatalf("expected missing statuses at positions 2 and 3, got %s and %s", got.Words[2].Status, got.Words[3].Status)
+	}
+}
+
+func TestAllWordsCorrectWithPunctuationAndCase(t *testing.T) {
+	expected := "One two three four"
+	got := CheckAnswer(expected, "one, TWO; three... four!")
+
+	if got.Points != 1.0 {
+		t.Fatalf("want 1.0 for fully correct normalized answer, got %.2f (%s)", got.Points, got.Feedback)
+	}
+	for i, w := range got.Words {
+		if w.Status != StatusCorrect {
+			t.Fatalf("word at index %d should be correct, got %s", i, w.Status)
+		}
+	}
+}
