@@ -24,10 +24,9 @@ type FeedbackResult struct {
 	Feedback string // HTML-safe for ParseMode HTML
 }
 
-// PhraseCatalog loads phrases from CONTENT.md and raw file contents for /print.
+// PhraseCatalog loads phrases from CONTENT.md.
 type PhraseCatalog interface {
 	AllPhrases() ([]content.Phrase, error)
-	RawMarkdown() ([]byte, error)
 }
 
 // Handlers aggregates telegram transport and domain ports.
@@ -194,30 +193,31 @@ func (h *Handlers) unknown(chatID int64) {
 }
 
 func (h *Handlers) printAll(chatID int64) {
-	b, err := h.Catalog.RawMarkdown()
-	if err != nil {
+	phrases, err := h.Catalog.AllPhrases()
+	if err != nil || len(phrases) == 0 {
 		if h.Log != nil {
-			h.Log.Printf("print raw markdown: %v", err)
+			h.Log.Printf("print phrases: %v", err)
 		}
 		h.replyHTML(chatID, i18n.ErrLoadPhrases)
 		return
 	}
 
-	text := string(b)
-	cfg := tgbotapi.MessageConfig{
-		BaseChat:              tgbotapi.BaseChat{ChatID: chatID},
-		DisableWebPagePreview: true,
-		Text:                  "",
-		ParseMode:             "",
-	}
-	chunks := splitTelegramChunks(text, 3900)
+	h.replyHTML(chatID, formatPrintPhrases(phrases))
+}
 
-	for _, ch := range chunks {
-		cfg.Text = ch
-		if _, err := h.API.Send(cfg); err != nil && h.Log != nil {
-			h.Log.Printf("send print chunk: %v", err)
-		}
+func formatPrintPhrases(phrases []content.Phrase) string {
+	const header = "<b>Phrase Table (German ↔ English)</b>"
+	var b strings.Builder
+	b.WriteString(header)
+	for _, p := range phrases {
+		b.WriteString("\n\n")
+		b.WriteString(formatPhrasePair(p))
 	}
+	return b.String()
+}
+
+func formatPhrasePair(p content.Phrase) string {
+	return `<blockquote>` + htmlEscape(p.German) + `</blockquote>` + "\n" + htmlEscape(p.English)
 }
 
 func htmlEscape(s string) string {

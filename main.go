@@ -2,8 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
-	"path/filepath"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -25,10 +23,6 @@ type fileCatalog struct{ path string }
 
 func (f fileCatalog) AllPhrases() ([]content.Phrase, error) {
 	return (&content.Loader{Path: f.path}).ParseFile()
-}
-
-func (f fileCatalog) RawMarkdown() ([]byte, error) {
-	return os.ReadFile(filepath.Clean(f.path))
 }
 
 func main() {
