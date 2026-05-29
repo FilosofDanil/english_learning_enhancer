@@ -42,8 +42,9 @@ func main() {
 	log.Printf("authorized as %s", api.Self.UserName)
 
 	store := session.NewMemory()
+	registry := session.NewMemoryRegistry()
 	catalog := fileCatalog{path: cfg.ContentPath}
-	h := applbot.NewHandlers(api, store, catalog, telegramChecker{}, log.Default())
+	h := applbot.NewHandlers(api, store, registry, catalog, telegramChecker{}, log.Default())
 
 	applbot.RunLongPolling(api, h, cfg.PollTimeout)
 }

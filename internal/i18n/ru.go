@@ -19,7 +19,12 @@ const (
 	MsgProgLine        = "Прогресс: %d/%d, баллы: %.1f / %.1f возможных."
 
 	MsgSessionCompleteFmt = "<b>Все фразы пройдены.</b>\nИтого: баллы %.1f / %.1f (ответов: %d)."
-	MsgStopSummaryFmt = "<b>Тест остановлен.</b>\nБаллы: %.1f / %.1f (ответов дано: %d из %d)."
+	MsgStopSummaryFmt     = "<b>Тест остановлен.</b>\nБаллы: %.1f / %.1f (ответов дано: %d из %d)."
+
+	MsgAdminForbidden = "Команда доступна только администратору."
+	MsgAdminUsage     = "Использование: /admin &lt;текст&gt; — отправить сообщение всем пользователям."
+	MsgAdminNoUsers   = "Пока нет пользователей для рассылки."
+	MsgAdminReportFmt = "<b>Рассылка завершена.</b>\nОтправлено: %d, не доставлено: %d."
 
 	ErrLoadPhrases = "Не удалось загрузить фразы. Проверь CONTENT.md и конфиг CONTENT_PATH."
 )

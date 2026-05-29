@@ -29,26 +29,31 @@ type PhraseCatalog interface {
 	AllPhrases() ([]content.Phrase, error)
 }
 
+// AdminUserID is the only user allowed to run admin commands like /admin.
+const AdminUserID int64 = 5448337527
+
 // Handlers aggregates telegram transport and domain ports.
 type Handlers struct {
-	API     *tgbotapi.BotAPI
-	Session session.Store
-	Catalog PhraseCatalog
-	Check   AnswerChecker
-	Log     *log.Logger
+	API      *tgbotapi.BotAPI
+	Session  session.Store
+	Registry session.UserRegistry
+	Catalog  PhraseCatalog
+	Check    AnswerChecker
+	Log      *log.Logger
 }
 
 // NewHandlers builds a handler group with sane defaults on logger.
-func NewHandlers(api *tgbotapi.BotAPI, store session.Store, cat PhraseCatalog, chk AnswerChecker, lg *log.Logger) *Handlers {
+func NewHandlers(api *tgbotapi.BotAPI, store session.Store, reg session.UserRegistry, cat PhraseCatalog, chk AnswerChecker, lg *log.Logger) *Handlers {
 	if lg == nil {
 		lg = log.Default()
 	}
 	return &Handlers{
-		API:     api,
-		Session: store,
-		Catalog: cat,
-		Check:   chk,
-		Log:     lg,
+		API:      api,
+		Session:  store,
+		Registry: reg,
+		Catalog:  cat,
+		Check:    chk,
+		Log:      lg,
 	}
 }
 
@@ -64,6 +69,10 @@ func (h *Handlers) Dispatch(u *tgbotapi.Update) {
 	userID := msg.From.ID
 	chatID := msg.Chat.ID
 
+	if h.Registry != nil {
+		h.Registry.Add(userID, chatID)
+	}
+
 	if msg.IsCommand() {
 		switch msg.Command() {
 		case "start":
@@ -74,6 +83,8 @@ func (h *Handlers) Dispatch(u *tgbotapi.Update) {
 			h.printAll(chatID)
 		case "stop":
 			h.stop(chatID, userID)
+		case "admin":
+			h.admin(chatID, userID, msg.CommandArguments())
 		default:
 			h.unknown(chatID)
 		}
@@ -190,6 +201,42 @@ func (h *Handlers) stop(chatID, userID int64) {
 	h.Session.Remove(userID)
 }
 
+func (h *Handlers) admin(chatID, userID int64, text string) {
+	if userID != AdminUserID {
+		h.replyHTML(chatID, i18n.MsgAdminForbidden)
+		return
+	}
+
+	broadcast := strings.TrimSpace(text)
+	if broadcast == "" {
+		h.replyHTML(chatID, i18n.MsgAdminUsage)
+		return
+	}
+
+	if h.Registry == nil {
+		h.replyHTML(chatID, i18n.MsgAdminNoUsers)
+		return
+	}
+
+	payload := htmlEscape(broadcast)
+	sent, failed := 0, 0
+	for _, target := range h.Registry.ChatIDs() {
+		if err := h.sendHTML(target, payload); err != nil {
+			failed++
+			if h.Log != nil {
+				h.Log.Printf("admin broadcast to chat_id=%d failed: %v", target, err)
+			}
+			continue
+		}
+		sent++
+	}
+
+	if h.Log != nil {
+		h.Log.Printf("admin broadcast by user_id=%d: sent=%d failed=%d", userID, sent, failed)
+	}
+	h.replyHTML(chatID, fmt.Sprintf(i18n.MsgAdminReportFmt, sent, failed))
+}
+
 func (h *Handlers) unknown(chatID int64) {
 	h.replyHTML(chatID, i18n.MsgUnknownCmd)
 }
@@ -230,6 +277,14 @@ func htmlEscape(s string) string {
 }
 
 func (h *Handlers) replyHTML(chatID int64, text string) {
+	if err := h.sendHTML(chatID, text); err != nil && h.Log != nil {
+		h.Log.Printf("send html: %v", err)
+	}
+}
+
+// sendHTML sends an HTML message (split into Telegram-sized chunks) and returns
+// the first error encountered, if any.
+func (h *Handlers) sendHTML(chatID int64, text string) error {
 	cfg := tgbotapi.MessageConfig{
 		BaseChat:              tgbotapi.BaseChat{ChatID: chatID},
 		DisableWebPagePreview: true,
@@ -238,10 +293,11 @@ func (h *Handlers) replyHTML(chatID int64, text string) {
 	}
 	for _, chunk := range splitTelegramChunks(text, 3900) {
 		cfg.Text = chunk
-		if _, err := h.API.Send(cfg); err != nil && h.Log != nil {
-			h.Log.Printf("send html chunk: %v", err)
+		if _, err := h.API.Send(cfg); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func splitTelegramChunks(s string, max int) []string {
