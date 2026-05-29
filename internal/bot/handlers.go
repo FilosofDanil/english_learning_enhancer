@@ -86,7 +86,9 @@ func (h *Handlers) Dispatch(u *tgbotapi.Update) {
 }
 
 func (h *Handlers) start(chatID, userID int64) {
-	_ = userID // reserved if per-user greetings are needed later
+	if h.Log != nil {
+		h.Log.Printf("/start command from user_id=%d", userID)
+	}
 	h.replyHTML(chatID, i18n.StartWelcome)
 }
 
